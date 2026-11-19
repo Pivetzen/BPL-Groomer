@@ -82,7 +82,7 @@
             class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
-        <p id="loginError" class="hidden text-xs font-medium text-rose-600">Senha incorreta. Tente novamente.</p>
+        <p id="loginError" class="hidden text-xs font-medium text-rose-600">Senha incorreta ou falha ao ler a aba Config.</p>
         <button
           type="submit"
           class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg transition cursor-pointer"
@@ -299,11 +299,9 @@
   </div>
 
   <script>
-    // Substitua pelo mesmo ID da planilha usado no index.html
-    const SHEET_ID = 'COLE_AQUI_O_ID_DA_PLANILHA';
+    const SHEET_ID = '1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s';
     const STORAGE_KEY = 'petagenda_appointments_v1';
     const SESSION_KEY = 'petagenda_auth_ok_v1';
-    const FALLBACK_PASSWORD = '1234';
 
     const STATUS_FLOW = ['Agendado', 'No Banho', 'Secagem / Tosa', 'Pronto p/ Buscar', 'Entregue'];
     const DONE_STATUSES = ['Pronto p/ Buscar', 'Entregue'];
@@ -316,10 +314,10 @@
       'Entregue': 'bg-emerald-100 text-emerald-800 border-emerald-200'
     };
 
-    let sheetPassword = FALLBACK_PASSWORD;
+    let sheetPassword = null;
 
     function getSheetCsvUrl(sheetName) {
-      return `https://docs.google.com/spreadsheets/d/1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+      return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     }
 
     function parseCSV(csvText) {
@@ -369,13 +367,10 @@
     }
 
     async function fetchSheetPassword() {
-      if (!SHEET_ID || SHEET_ID.includes('COLE_AQUI')) {
-        sheetPassword = FALLBACK_PASSWORD;
-        return;
-      }
+      sheetPassword = null;
       try {
         const res = await fetch(getSheetCsvUrl('Config'));
-        if (!res.ok) return;
+        if (!res.ok) return null;
         const csv = await res.text();
         const rows = parseCSV(csv);
         const passRow = rows.find(r => {
@@ -383,12 +378,14 @@
           return k === 'senha' || k === 'password';
         });
         if (passRow) {
-          sheetPassword = String(passRow.valor || passRow.senha || '').trim() || FALLBACK_PASSWORD;
+          sheetPassword = String(passRow.valor || passRow.senha || '').trim();
         } else if (rows[0] && rows[0].senha) {
-          sheetPassword = String(rows[0].senha).trim() || FALLBACK_PASSWORD;
+          sheetPassword = String(rows[0].senha).trim();
         }
+        return sheetPassword;
       } catch (err) {
         console.error('Erro ao ler senha da aba Config:', err);
+        return null;
       }
     }
 
@@ -398,11 +395,18 @@
       const errEl = document.getElementById('loginError');
       errEl.classList.add('hidden');
 
-      await fetchSheetPassword();
-      if (input.value.trim() === sheetPassword) {
+      const loadedPassword = await fetchSheetPassword();
+      if (!loadedPassword) {
+        errEl.textContent = 'Não foi possível validar a senha na aba Config. Verifique se a planilha está acessível para leitura.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      if (input.value.trim() === loadedPassword) {
         sessionStorage.setItem(SESSION_KEY, '1');
         unlockPanel();
       } else {
+        errEl.textContent = 'Senha incorreta. Tente novamente.';
         errEl.classList.remove('hidden');
       }
     }
@@ -485,10 +489,6 @@
     }
 
     async function syncFromSheet(showAlert = false) {
-      if (!SHEET_ID || SHEET_ID.includes('COLE_AQUI')) {
-        if (showAlert) alert('Configure SHEET_ID para importar dados da aba "Atendimentos".');
-        return;
-      }
       try {
         const res = await fetch(getSheetCsvUrl('Atendimentos'));
         if (!res.ok) throw new Error('Falha ao acessar aba Atendimentos');
@@ -820,7 +820,6 @@
 
     // Inicialização
     document.getElementById('filterDate').value = getTodayISO();
-    fetchSheetPassword();
     if (sessionStorage.getItem(SESSION_KEY) === '1') {
       unlockPanel();
     }
