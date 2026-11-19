@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PetAgenda — Painel do Profissional</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+  <!-- Cabeçalho -->
+  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-20">
+    <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">🐾 PetAgenda — Painel do Profissional</h1>
+        <p class="text-xs text-slate-300">Relatório de serviços, atendimentos, pagamentos e WhatsApp</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <a
+          href="index.html"
+          class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium px-3 py-2 rounded-lg border border-slate-700 transition"
+        >
+          Tela do Cliente
+        </a>
+        <button
+          onclick="openModal()"
+          class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm px-3.5 py-2 rounded-lg shadow-sm transition cursor-pointer"
+        >
+          + Novo Atendimento
+        </button>
+        <button
+          onclick="syncFromSheet(true)"
+          class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium px-3 py-2 rounded-lg border border-slate-700 transition cursor-pointer"
+          title="Recarregar atendimentos do Google Sheets"
+        >
+          Recarregar Sheets
+        </button>
+        <button
+          onclick="exportData()"
+          class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium px-3 py-2 rounded-lg border border-slate-700 transition cursor-pointer"
+          title="Baixar backup em JSON"
+        >
+          Exportar
+        </button>
+        <label
+          class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium px-3 py-2 rounded-lg border border-slate-700 transition cursor-pointer"
+          title="Restaurar backup JSON"
+        >
+          Importar
+          <input type="file" accept=".json" onchange="importData(event)" class="hidden" />
+        </label>
+        <button
+          onclick="lockPanel()"
+          class="bg-rose-950 hover:bg-rose-900 text-rose-200 text-xs font-medium px-3 py-2 rounded-lg border border-rose-800/50 transition cursor-pointer"
+          title="Bloquear painel"
+        >
+          Sair
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tela de Senha -->
+  <div id="loginScreen" class="max-w-md mx-auto px-4 py-16">
+    <div class="bg-white rounded-2xl p-6 shadow-md border border-slate-200 space-y-4">
+      <div>
+        <h2 class="text-lg font-bold text-slate-800">Acesso Restrito ao Profissional</h2>
+        <p id="loginHint" class="text-xs text-slate-500 mt-1">Digite a senha configurada na aba "Config" do Google Sheets.</p>
+      </div>
+      <form onsubmit="handleLogin(event)" class="space-y-3.5">
+        <div>
+          <label for="passwordInput" class="block text-xs font-semibold text-slate-600 mb-1">Senha</label>
+          <input
+            type="password"
+            id="passwordInput"
+            required
+            placeholder="Digite sua senha"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <p id="loginError" class="hidden text-xs font-medium text-rose-600">Senha incorreta. Tente novamente.</p>
+        <button
+          type="submit"
+          class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg transition cursor-pointer"
+        >
+          Entrar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Painel Principal -->
+  <main id="panelContent" class="max-w-6xl mx-auto px-4 py-6 space-y-6 hidden">
+    <!-- Cards de Resumo -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+        <span class="text-xs font-medium text-slate-500">Atendimentos (Filtro)</span>
+        <p id="statTotal" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+        <span class="text-xs font-medium text-slate-500">Prontos p/ Buscar</span>
+        <p id="statReady" class="text-2xl font-bold text-amber-600 mt-1">0</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+        <span class="text-xs font-medium text-slate-500">Recebido</span>
+        <p id="statPaid" class="text-2xl font-bold text-emerald-600 mt-1">R$ 0,00</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+        <span class="text-xs font-medium text-slate-500">A Receber</span>
+        <p id="statPending" class="text-2xl font-bold text-sky-600 mt-1">R$ 0,00</p>
+      </div>
+    </section>
+
+    <!-- Relatório Rápido: Realizados x A Realizar -->
+    <section class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-sm">
+      <div class="flex flex-wrap items-center gap-4">
+        <span class="text-slate-600">A realizar: <strong id="repTodo" class="text-sky-700">0</strong></span>
+        <span class="text-slate-600">Realizados / Prontos: <strong id="repDone" class="text-emerald-700">0</strong></span>
+      </div>
+      <span id="sheetStatusText" class="text-xs text-slate-400">Modo local + Google Sheets</span>
+    </section>
+
+    <!-- Filtros -->
+    <section class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <div>
+          <label for="filterDate" class="block text-xs font-medium text-slate-500 mb-1">Data</label>
+          <input
+            type="date"
+            id="filterDate"
+            onchange="renderAppointments()"
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div>
+          <label for="filterStatus" class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+          <select
+            id="filterStatus"
+            onchange="renderAppointments()"
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+          >
+            <option value="ALL">Todos</option>
+            <option value="Agendado">Agendado</option>
+            <option value="No Banho">No Banho</option>
+            <option value="Secagem / Tosa">Secagem / Tosa</option>
+            <option value="Pronto p/ Buscar">Pronto p/ Buscar</option>
+            <option value="Entregue">Entregue</option>
+          </select>
+        </div>
+        <div>
+          <label for="searchInput" class="block text-xs font-medium text-slate-500 mb-1">Buscar cão, raça ou tutor</label>
+          <input
+            type="text"
+            id="searchInput"
+            oninput="renderAppointments()"
+            placeholder="Ex.: Thor, Golden, Maria..."
+            class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button
+          onclick="setToday()"
+          class="text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg transition cursor-pointer"
+        >
+          Ir para Hoje
+        </button>
+        <button
+          onclick="clearDate()"
+          class="text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition cursor-pointer"
+        >
+          Todas as Datas
+        </button>
+      </div>
+    </section>
+
+    <!-- Lista de Atendimentos -->
+    <section id="appointmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></section>
+
+    <!-- Estado Vazio -->
+    <div id="emptyState" class="hidden bg-white rounded-xl p-10 text-center border border-dashed border-slate-300">
+      <p class="text-slate-600 font-medium">Nenhum atendimento encontrado para os filtros atuais.</p>
+      <p class="text-xs text-slate-400 mt-1">Clique em "+ Novo Atendimento" para cadastrar um banho ou tosa.</p>
+    </div>
+  </main>
+
+  <!-- Modal de Cadastro / Edição -->
+  <div id="appointmentModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center p-4 z-30">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+        <h2 id="modalTitle" class="text-lg font-bold text-slate-800">Novo Atendimento</h2>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-xl leading-none cursor-pointer">&times;</button>
+      </div>
+
+      <form id="appointmentForm" onsubmit="saveAppointment(event)" class="space-y-3.5">
+        <input type="hidden" id="apptId" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Data *</label>
+            <input type="date" id="apptDate" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Horário *</label>
+            <input type="time" id="apptTime" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Nome do Cão *</label>
+            <input type="text" id="petName" required placeholder="Ex.: Pipoca" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Raça / Porte</label>
+            <input type="text" id="petBreed" placeholder="Ex.: Shih Tzu (Pequeno)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Nome do Tutor *</label>
+            <input type="text" id="ownerName" required placeholder="Ex.: Ana Paula" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">WhatsApp (com DDD)</label>
+            <input type="tel" id="ownerPhone" placeholder="Ex.: 85999998888" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Serviço *</label>
+            <select id="serviceType" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="Banho">Banho</option>
+              <option value="Banho + Tosa Higiênica">Banho + Tosa Higiênica</option>
+              <option value="Banho + Tosa na Máquina">Banho + Tosa na Máquina</option>
+              <option value="Banho + Tosa na Tesoura">Banho + Tosa na Tesoura</option>
+              <option value="Tosa Geral">Tosa Geral</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Valor (R$) *</label>
+            <input type="number" step="0.01" min="0" id="price" required placeholder="65.00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+            <select id="status" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="Agendado">Agendado</option>
+              <option value="No Banho">No Banho</option>
+              <option value="Secagem / Tosa">Secagem / Tosa</option>
+              <option value="Pronto p/ Buscar">Pronto p/ Buscar</option>
+              <option value="Entregue">Entregue</option>
+            </select>
+          </div>
+          <div class="flex items-end pb-2">
+            <label class="inline-flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+              <input type="checkbox" id="paid" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4" />
+              Pagamento já realizado
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Observações do Cão</label>
+          <textarea
+            id="notes"
+            rows="2"
+            placeholder="Ex.: Sensível no ouvido, prefere água morna, não usar perfume forte..."
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          ></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+          <button
+            type="button"
+            onclick="closeModal()"
+            class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            class="px-4 py-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer"
+          >
+            Salvar Atendimento
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Substitua pelo mesmo ID da planilha usado no index.html
+    const SHEET_ID = 'COLE_AQUI_O_ID_DA_PLANILHA';
+    const STORAGE_KEY = 'petagenda_appointments_v1';
+    const SESSION_KEY = 'petagenda_auth_ok_v1';
+    const FALLBACK_PASSWORD = '1234';
+
+    const STATUS_FLOW = ['Agendado', 'No Banho', 'Secagem / Tosa', 'Pronto p/ Buscar', 'Entregue'];
+    const DONE_STATUSES = ['Pronto p/ Buscar', 'Entregue'];
+
+    const STATUS_BADGES = {
+      'Agendado': 'bg-slate-100 text-slate-700 border-slate-200',
+      'No Banho': 'bg-sky-100 text-sky-800 border-sky-200',
+      'Secagem / Tosa': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'Pronto p/ Buscar': 'bg-amber-100 text-amber-800 border-amber-200',
+      'Entregue': 'bg-emerald-100 text-emerald-800 border-emerald-200'
+    };
+
+    let sheetPassword = FALLBACK_PASSWORD;
+
+    function getSheetCsvUrl(sheetName) {
+      return `https://docs.google.com/spreadsheets/d/1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+    }
+
+    function parseCSV(csvText) {
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < csvText.length; i++) {
+        const ch = csvText[i];
+        const next = csvText[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            field += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          row.push(field.trim());
+          field = '';
+        } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          row.push(field.trim());
+          if (row.some(cell => cell !== '')) rows.push(row);
+          row = [];
+          field = '';
+        } else {
+          field += ch;
+        }
+      }
+      if (field.length > 0 || row.length > 0) {
+        row.push(field.trim());
+        if (row.some(cell => cell !== '')) rows.push(row);
+      }
+
+      if (rows.length < 2) return [];
+      const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
+      return rows.slice(1).map(r => {
+        const obj = {};
+        headers.forEach((h, idx) => {
+          obj[h] = r[idx] !== undefined ? r[idx] : '';
+        });
+        return obj;
+      });
+    }
+
+    async function fetchSheetPassword() {
+      if (!SHEET_ID || SHEET_ID.includes('COLE_AQUI')) {
+        sheetPassword = FALLBACK_PASSWORD;
+        return;
+      }
+      try {
+        const res = await fetch(getSheetCsvUrl('Config'));
+        if (!res.ok) return;
+        const csv = await res.text();
+        const rows = parseCSV(csv);
+        const passRow = rows.find(r => {
+          const k = String(r.chave || r.config || r.item || r.nome || '').toLowerCase();
+          return k === 'senha' || k === 'password';
+        });
+        if (passRow) {
+          sheetPassword = String(passRow.valor || passRow.senha || '').trim() || FALLBACK_PASSWORD;
+        } else if (rows[0] && rows[0].senha) {
+          sheetPassword = String(rows[0].senha).trim() || FALLBACK_PASSWORD;
+        }
+      } catch (err) {
+        console.error('Erro ao ler senha da aba Config:', err);
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const input = document.getElementById('passwordInput');
+      const errEl = document.getElementById('loginError');
+      errEl.classList.add('hidden');
+
+      await fetchSheetPassword();
+      if (input.value.trim() === sheetPassword) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        unlockPanel();
+      } else {
+        errEl.classList.remove('hidden');
+      }
+    }
+
+    function unlockPanel() {
+      document.getElementById('loginScreen').classList.add('hidden');
+      document.getElementById('panelContent').classList.remove('hidden');
+      renderAppointments();
+    }
+
+    function lockPanel() {
+      sessionStorage.removeItem(SESSION_KEY);
+      document.getElementById('passwordInput').value = '';
+      document.getElementById('panelContent').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+    }
+
+    function getTodayISO() {
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      const local = new Date(now.getTime() - offset * 60000);
+      return local.toISOString().split('T')[0];
+    }
+
+    function setToday() {
+      document.getElementById('filterDate').value = getTodayISO();
+      renderAppointments();
+    }
+
+    function clearDate() {
+      document.getElementById('filterDate').value = '';
+      renderAppointments();
+    }
+
+    function loadAppointments() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {
+        console.error('Erro ao ler dados:', e);
+      }
+
+      const today = getTodayISO();
+      const sample = [
+        {
+          id: crypto.randomUUID(),
+          date: today,
+          time: '09:00',
+          petName: 'Rex',
+          petBreed: 'SRD (Médio)',
+          ownerName: 'Carlos Eduardo',
+          ownerPhone: '85999991111',
+          serviceType: 'Banho + Tosa Higiênica',
+          price: 75,
+          status: 'No Banho',
+          paid: false,
+          notes: 'Calmo, mas tem receio com barulho forte no início.'
+        },
+        {
+          id: crypto.randomUUID(),
+          date: today,
+          time: '10:30',
+          petName: 'Luna',
+          petBreed: 'Poodle (Pequeno)',
+          ownerName: 'Beatriz Lima',
+          ownerPhone: '85999992222',
+          serviceType: 'Banho + Tosa na Tesoura',
+          price: 95,
+          status: 'Pronto p/ Buscar',
+          paid: true,
+          notes: 'Deixar o topete arredondado.'
+        }
+      ];
+      saveToStorage(sample);
+      return sample;
+    }
+
+    function saveToStorage(list) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    }
+
+    async function syncFromSheet(showAlert = false) {
+      if (!SHEET_ID || SHEET_ID.includes('COLE_AQUI')) {
+        if (showAlert) alert('Configure SHEET_ID para importar dados da aba "Atendimentos".');
+        return;
+      }
+      try {
+        const res = await fetch(getSheetCsvUrl('Atendimentos'));
+        if (!res.ok) throw new Error('Falha ao acessar aba Atendimentos');
+        const csv = await res.text();
+        const rows = parseCSV(csv);
+
+        if (rows.length > 0) {
+          const mapped = rows.map(r => ({
+            id: r.id || crypto.randomUUID(),
+            date: r.data || getTodayISO(),
+            time: (r.hora || '09:00').slice(0, 5),
+            petName: r.pet_nome || '',
+            petBreed: r.pet_raca_porte || '',
+            ownerName: r.tutor_nome || '',
+            ownerPhone: String(r.tutor_whatsapp || '').replace(/\D/g, ''),
+            serviceType: r.servico || 'Banho',
+            price: parseFloat(String(r.valor || '0').replace(',', '.')) || 0,
+            status: r.status || 'Agendado',
+            paid: String(r.pago).toLowerCase() === 'true' || r.pago === '1' || String(r.pago).toLowerCase() === 'sim',
+            notes: r.observacoes || ''
+          })).filter(x => x.petName || x.ownerName);
+
+          saveToStorage(mapped);
+          document.getElementById('sheetStatusText').textContent = 'Atendimentos carregados do Google Sheets';
+          renderAppointments();
+          if (showAlert) alert('Dados carregados da aba "Atendimentos" com sucesso!');
+        }
+      } catch (err) {
+        console.error(err);
+        if (showAlert) alert('Não foi possível ler a aba "Atendimentos". Verifique se a planilha está pública para leitura.');
+      }
+    }
+
+    function formatCurrency(value) {
+      return Number(value || 0).toLocaleString('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      });
+    }
+
+    function openModal(id = null) {
+      const modal = document.getElementById('appointmentModal');
+      const form = document.getElementById('appointmentForm');
+      form.reset();
+
+      if (id) {
+        const list = loadAppointments();
+        const item = list.find(a => a.id === id);
+        if (!item) return;
+
+        document.getElementById('modalTitle').textContent = 'Editar Atendimento';
+        document.getElementById('apptId').value = item.id;
+        document.getElementById('apptDate').value = item.date;
+        document.getElementById('apptTime').value = item.time;
+        document.getElementById('petName').value = item.petName;
+        document.getElementById('petBreed').value = item.petBreed || '';
+        document.getElementById('ownerName').value = item.ownerName;
+        document.getElementById('ownerPhone').value = item.ownerPhone || '';
+        document.getElementById('serviceType').value = item.serviceType;
+        document.getElementById('price').value = item.price;
+        document.getElementById('status').value = item.status;
+        document.getElementById('paid').checked = Boolean(item.paid);
+        document.getElementById('notes').value = item.notes || '';
+      } else {
+        document.getElementById('modalTitle').textContent = 'Novo Atendimento';
+        document.getElementById('apptId').value = '';
+        document.getElementById('apptDate').value = document.getElementById('filterDate').value || getTodayISO();
+        document.getElementById('apptTime').value = '09:00';
+        document.getElementById('status').value = 'Agendado';
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('appointmentModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function saveAppointment(event) {
+      event.preventDefault();
+      const list = loadAppointments();
+      const existingId = document.getElementById('apptId').value;
+
+      const payload = {
+        id: existingId || crypto.randomUUID(),
+        date: document.getElementById('apptDate').value,
+        time: document.getElementById('apptTime').value,
+        petName: document.getElementById('petName').value.trim(),
+        petBreed: document.getElementById('petBreed').value.trim(),
+        ownerName: document.getElementById('ownerName').value.trim(),
+        ownerPhone: document.getElementById('ownerPhone').value.replace(/\D/g, ''),
+        serviceType: document.getElementById('serviceType').value,
+        price: parseFloat(document.getElementById('price').value) || 0,
+        status: document.getElementById('status').value,
+        paid: document.getElementById('paid').checked,
+        notes: document.getElementById('notes').value.trim()
+      };
+
+      if (existingId) {
+        const idx = list.findIndex(a => a.id === existingId);
+        if (idx !== -1) list[idx] = payload;
+      } else {
+        list.push(payload);
+      }
+
+      saveToStorage(list);
+      closeModal();
+      document.getElementById('filterDate').value = payload.date;
+      renderAppointments();
+    }
+
+    function advanceStatus(id) {
+      const list = loadAppointments();
+      const item = list.find(a => a.id === id);
+      if (!item) return;
+
+      const currentIdx = STATUS_FLOW.indexOf(item.status);
+      if (currentIdx < STATUS_FLOW.length - 1) {
+        item.status = STATUS_FLOW[currentIdx + 1];
+        saveToStorage(list);
+        renderAppointments();
+      }
+    }
+
+    function togglePaid(id) {
+      const list = loadAppointments();
+      const item = list.find(a => a.id === id);
+      if (!item) return;
+
+      item.paid = !item.paid;
+      saveToStorage(list);
+      renderAppointments();
+    }
+
+    function deleteAppointment(id) {
+      if (!confirm('Deseja realmente excluir este atendimento?')) return;
+      const list = loadAppointments().filter(a => a.id !== id);
+      saveToStorage(list);
+      renderAppointments();
+    }
+
+    function sendWhatsApp(id) {
+      const list = loadAppointments();
+      const item = list.find(a => a.id === id);
+      if (!item) return;
+
+      const phone = item.ownerPhone.startsWith('55') ? item.ownerPhone : `55${item.ownerPhone}`;
+      const message = item.status === 'Pronto p/ Buscar'
+        ? `Olá ${item.ownerName}! Passando para avisar que ${item.petName} já concluiu o serviço (${item.serviceType}) e está pronto(a) para buscar! 🐾`
+        : `Olá ${item.ownerName}! Confirmando o atendimento de ${item.petName} (${item.serviceType}) às ${item.time}. 🐾`;
+
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function exportData() {
+      const data = loadAppointments();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup-banho-tosa-${getTodayISO()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (!Array.isArray(parsed)) throw new Error('Formato inválido');
+          saveToStorage(parsed);
+          renderAppointments();
+          alert('Backup importado com sucesso!');
+        } catch (err) {
+          alert('Arquivo inválido. Selecione um JSON exportado pelo sistema.');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function escapeHTML(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderAppointments() {
+      const all = loadAppointments();
+      const selectedDate = document.getElementById('filterDate').value;
+      const selectedStatus = document.getElementById('filterStatus').value;
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      const byDate = selectedDate ? all.filter(a => a.date === selectedDate) : all;
+
+      const totalCount = byDate.length;
+      const readyCount = byDate.filter(a => a.status === 'Pronto p/ Buscar').length;
+      const doneCount = byDate.filter(a => DONE_STATUSES.includes(a.status)).length;
+      const todoCount = byDate.filter(a => !DONE_STATUSES.includes(a.status)).length;
+      const paidSum = byDate.filter(a => a.paid).reduce((acc, a) => acc + Number(a.price || 0), 0);
+      const pendingSum = byDate.filter(a => !a.paid).reduce((acc, a) => acc + Number(a.price || 0), 0);
+
+      document.getElementById('statTotal').textContent = totalCount;
+      document.getElementById('statReady').textContent = readyCount;
+      document.getElementById('repTodo').textContent = todoCount;
+      document.getElementById('repDone').textContent = doneCount;
+      document.getElementById('statPaid').textContent = formatCurrency(paidSum);
+      document.getElementById('statPending').textContent = formatCurrency(pendingSum);
+
+      const filtered = byDate
+        .filter(a => selectedStatus === 'ALL' || a.status === selectedStatus)
+        .filter(a => {
+          if (!query) return true;
+          const haystack = `${a.petName} ${a.petBreed} ${a.ownerName} ${a.serviceType}`.toLowerCase();
+          return haystack.includes(query);
+        })
+        .sort((a, b) => `${a.data || ''} ${a.time || ''}`.localeCompare(`${b.data || ''} ${b.time || ''}`));
+
+      const container = document.getElementById('appointmentsList');
+      const emptyState = document.getElementById('emptyState');
+
+      if (filtered.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      container.innerHTML = filtered.map(item => {
+        const badgeClass = STATUS_BADGES[item.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+        const nextIdx = STATUS_FLOW.indexOf(item.status) + 1;
+        const nextStatus = nextIdx < STATUS_FLOW.length ? STATUS_FLOW[nextIdx] : null;
+
+        return `
+          <article class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/90 flex flex-col justify-between gap-4">
+            <div class="space-y-2.5">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <span class="inline-block text-xs font-bold bg-slate-900 text-white px-2 py-0.5 rounded-md">
+                    ${escapeHTML(item.time)}
+                  </span>
+                  <h3 class="text-lg font-bold text-slate-800 mt-1">
+                    ${escapeHTML(item.petName)}
+                    ${item.petBreed ? `<span class="text-xs font-normal text-slate-500">(${escapeHTML(item.petBreed)})</span>` : ''}
+                  </h3>
+                </div>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full border ${badgeClass} whitespace-nowrap">
+                  ${escapeHTML(item.status)}
+                </span>
+              </div>
+
+              <div class="text-sm text-slate-600 space-y-1">
+                <p><strong class="text-slate-700">Serviço:</strong> ${escapeHTML(item.serviceType)}</p>
+                <p><strong class="text-slate-700">Tutor:</strong> ${escapeHTML(item.ownerName)}</p>
+                <p class="flex items-center justify-between pt-0.5">
+                  <span><strong class="text-slate-700">Valor:</strong> ${formatCurrency(item.price)}</span>
+                  <button
+                    onclick="togglePaid('${item.id}')"
+                    class="text-xs font-semibold px-2 py-0.5 rounded-md border cursor-pointer transition ${
+                      item.paid
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                    }"
+                    title="Clique para alternar pago/pendente"
+                  >
+                    ${item.paid ? '✓ Pago' : 'Pendente'}
+                  </button>
+                </p>
+              </div>
+
+              ${item.notes ? `
+                <div class="bg-amber-50/80 border border-amber-200/70 rounded-lg p-2.5 text-xs text-amber-900">
+                  <strong>Obs.:</strong> ${escapeHTML(item.notes)}
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+              ${nextStatus ? `
+                <button
+                  onclick="advanceStatus('${item.id}')"
+                  class="text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  Avançar → ${escapeHTML(nextStatus)}
+                </button>
+              ` : `
+                <span class="text-xs font-medium text-emerald-700">Concluído</span>
+              `}
+
+              <div class="flex items-center gap-1.5">
+                ${item.ownerPhone ? `
+                  <button
+                    onclick="sendWhatsApp('${item.id}')"
+                    class="text-xs font-semibold bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                    title="Avisar tutor no WhatsApp"
+                  >
+                    WhatsApp
+                  </button>
+                ` : ''}
+                <button
+                  onclick="openModal('${item.id}')"
+                  class="text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                >
+                  Editar
+                </button>
+                <button
+                  onclick="deleteAppointment('${item.id}')"
+                  class="text-xs font-medium bg-rose-50 hover:bg-rose-100 text-rose-600 px-2 py-1.5 rounded-lg transition cursor-pointer"
+                  title="Excluir"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    // Inicialização
+    document.getElementById('filterDate').value = getTodayISO();
+    fetchSheetPassword();
+    if (sessionStorage.getItem(SESSION_KEY) === '1') {
+      unlockPanel();
+    }
+  </script>
+</body>
+</html>
