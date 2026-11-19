@@ -117,9 +117,8 @@
   </footer>
 
   <script>
-    // Substitua pelo ID da sua planilha do Google Sheets
-    const SHEET_ID = 'COLE_AQUI_O_ID_DA_PLANILHA';
-    let whatsappNumber = '5585999999999';
+    const SHEET_ID = '1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s';
+    let whatsappNumber = '5585987804628';
     let servicesList = [];
 
     const DEFAULT_SERVICES = [
@@ -172,7 +171,6 @@
         .replace(/"/g, '&quot;');
     }
 
-    // Parser simples e confiável de CSV com suporte a aspas
     function parseCSV(csvText) {
       const rows = [];
       let row = [];
@@ -220,7 +218,7 @@
     }
 
     function getSheetCsvUrl(sheetName) {
-      return `https://docs.google.com/spreadsheets/d/1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+      return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     }
 
     function buildWhatsAppUrl(serviceName = '') {
@@ -284,13 +282,6 @@
 
     async function loadPublicServices() {
       const infoEl = document.getElementById('sourceInfo');
-
-      if (!SHEET_ID || SHEET_ID.includes('COLE_AQUI')) {
-        servicesList = DEFAULT_SERVICES;
-        infoEl.textContent = 'Exibindo serviços padrão (configure SHEET_ID para puxar do Google Sheets).';
-        renderServices();
-        return;
-      }
 
       try {
         const [srvRes, cfgRes] = await Promise.allSettled([
