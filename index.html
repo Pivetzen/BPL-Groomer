@@ -118,6 +118,7 @@
 
   <script>
     const SHEET_ID = '1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s';
+    const PUB_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOcWdd6WVHMUrYSS0cE5krxcvljOjCeEjGqox3Dnfc_CfG1jZ8RdPQ0C3PlqSGM6QJQ_VCEAd0oh1-/pub?output=csv';
     let whatsappNumber = '5585987804628';
     let servicesList = [];
 
@@ -171,7 +172,7 @@
         .replace(/"/g, '&quot;');
     }
 
-    function parseCSV(csvText) {
+    function parseCSVRaw(csvText) {
       const rows = [];
       let row = [];
       let field = '';
@@ -205,7 +206,11 @@
         row.push(field.trim());
         if (row.some(cell => cell !== '')) rows.push(row);
       }
+      return rows;
+    }
 
+    function parseCSV(csvText) {
+      const rows = parseCSVRaw(csvText);
       if (rows.length < 2) return [];
       const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
       return rows.slice(1).map(r => {
@@ -285,16 +290,16 @@
 
       try {
         const [srvRes, cfgRes] = await Promise.allSettled([
-          fetch(getSheetCsvUrl('Servicos')),
-          fetch(getSheetCsvUrl('Config'))
+          fetch(`${getSheetCsvUrl('Servicos')}&_ts=${Date.now()}`),
+          fetch(`${getSheetCsvUrl('Config')}&_ts=${Date.now()}`)
         ]);
 
         if (cfgRes.status === 'fulfilled' && cfgRes.value.ok) {
           const cfgCsv = await cfgRes.value.text();
-          const cfgRows = parseCSV(cfgCsv);
-          const waRow = cfgRows.find(r => String(r.chave || r.config || r.senha || '').toLowerCase() === 'whatsapp');
-          if (waRow && waRow.valor) {
-            whatsappNumber = String(waRow.valor).replace(/\D/g, '') || whatsappNumber;
+          const rawCfg = parseCSVRaw(cfgCsv);
+          const waRaw = rawCfg.find(r => String(r[0] || '').trim().toLowerCase() === 'whatsapp');
+          if (waRaw && waRaw[1]) {
+            whatsappNumber = String(waRaw[1]).replace(/\D/g, '') || whatsappNumber;
           }
         }
 
@@ -310,7 +315,7 @@
         }
 
         servicesList = DEFAULT_SERVICES;
-        infoEl.textContent = 'Usando serviços de exemplo (verifique a publicação/permissão da planilha).';
+        infoEl.textContent = 'Usando serviços de exemplo (verifique a aba "Servicos" na planilha).';
         renderServices();
       } catch (err) {
         console.error(err);
