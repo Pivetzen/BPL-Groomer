@@ -27,6 +27,13 @@
           Tela do Cliente
         </a>
         <button
+          onclick="toggleViewMode()"
+          id="btnToggleAttendance"
+          class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm px-3.5 py-2 rounded-lg shadow-sm transition cursor-pointer"
+        >
+          Tela de Atendimento
+        </button>
+        <button
           onclick="openModal()"
           class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm px-3.5 py-2 rounded-lg shadow-sm transition cursor-pointer"
         >
@@ -95,47 +102,125 @@
 
   <!-- Painel Principal -->
   <main id="panelContent" class="max-w-6xl mx-auto px-4 py-6 space-y-6 hidden">
-    <!-- Cards de Resumo -->
-    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
-        <span class="text-xs font-medium text-slate-500">Atendimentos (Filtro)</span>
-        <p id="statTotal" class="text-2xl font-bold text-slate-800 mt-1">0</p>
-      </div>
-      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
-        <span class="text-xs font-medium text-slate-500">Prontos p/ Buscar</span>
-        <p id="statReady" class="text-2xl font-bold text-amber-600 mt-1">0</p>
-      </div>
-      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
-        <span class="text-xs font-medium text-slate-500">Recebido</span>
-        <p id="statPaid" class="text-2xl font-bold text-emerald-600 mt-1">R$ 0,00</p>
-      </div>
-      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
-        <span class="text-xs font-medium text-slate-500">A Receber</span>
-        <p id="statPending" class="text-2xl font-bold text-sky-600 mt-1">R$ 0,00</p>
-      </div>
-    </section>
-
-    <!-- Relatório Rápido: Realizados x A Realizar -->
-    <section class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-sm">
-      <div class="flex flex-wrap items-center gap-4">
-        <span class="text-slate-600">A realizar: <strong id="repTodo" class="text-sky-700">0</strong></span>
-        <span class="text-slate-600">Realizados / Prontos: <strong id="repDone" class="text-emerald-700">0</strong></span>
-      </div>
-      <span id="sheetStatusText" class="text-xs text-slate-400">Modo local + Google Sheets</span>
-    </section>
-
-    <!-- Filtros -->
+    <!-- Barra de Data / Navegação entre Painel e Tela de Atendimento -->
     <section class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-3">
         <div>
-          <label for="filterDate" class="block text-xs font-medium text-slate-500 mb-1">Data</label>
+          <label for="filterDate" class="block text-xs font-medium text-slate-500 mb-1">Data do Dia</label>
           <input
             type="date"
             id="filterDate"
-            onchange="renderAppointments()"
+            onchange="renderAll()"
             class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
+        <div class="pt-4 flex items-center gap-2">
+          <button
+            onclick="setToday()"
+            class="text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg transition cursor-pointer"
+          >
+            Ir para Hoje
+          </button>
+          <button
+            onclick="clearDate()"
+            class="text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition cursor-pointer"
+          >
+            Todas as Datas
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <button
+          id="tabAttendance"
+          onclick="setViewMode('attendance')"
+          class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition cursor-pointer bg-slate-900 text-white shadow-sm"
+        >
+          🐾 Tela de Atendimento
+        </button>
+        <button
+          id="tabDashboard"
+          onclick="setViewMode('dashboard')"
+          class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer text-slate-700 hover:bg-white"
+        >
+          Painel & Relatório
+        </button>
+      </div>
+    </section>
+
+    <!-- TELA DE ATENDIMENTO (Destaque Atual + Fila Posterior do Dia) -->
+    <section id="attendanceView" class="space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <!-- Pet em Atendimento Atual (Maior) -->
+        <div class="lg:col-span-7 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-extrabold uppercase tracking-wide text-slate-700">
+              Em Atendimento Atual
+            </h2>
+            <span id="callGateBadge" class="text-xs font-bold px-3 py-1 rounded-full border"></span>
+          </div>
+          <div id="currentPetCard"></div>
+        </div>
+
+        <!-- Lista de Pets com Atendimento Posterior no Mesmo Dia -->
+        <div class="lg:col-span-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-extrabold uppercase tracking-wide text-slate-700">
+              Próximos no Mesmo Dia
+            </h2>
+            <span id="upcomingCountBadge" class="text-xs font-semibold bg-slate-200 text-slate-700 px-2.5 py-0.5 rounded-full">
+              0
+            </span>
+          </div>
+          <div id="upcomingPetsList" class="space-y-3"></div>
+        </div>
+      </div>
+
+      <!-- Prontos para Buscar / Entregues no Dia (Consulta Rápida) -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/80 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+            Prontos p/ Buscar ou Entregues na Data
+          </h3>
+          <span id="finishedCountBadge" class="text-xs text-slate-400">0 registro(s)</span>
+        </div>
+        <div id="finishedPetsList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- PAINEL & RELATÓRIO COMPLETO -->
+    <section id="dashboardView" class="space-y-6 hidden">
+      <!-- Cards de Resumo -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+          <span class="text-xs font-medium text-slate-500">Atendimentos (Filtro)</span>
+          <p id="statTotal" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+          <span class="text-xs font-medium text-slate-500">Prontos p/ Buscar</span>
+          <p id="statReady" class="text-2xl font-bold text-amber-600 mt-1">0</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+          <span class="text-xs font-medium text-slate-500">Recebido</span>
+          <p id="statPaid" class="text-2xl font-bold text-emerald-600 mt-1">R$ 0,00</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80">
+          <span class="text-xs font-medium text-slate-500">A Receber</span>
+          <p id="statPending" class="text-2xl font-bold text-sky-600 mt-1">R$ 0,00</p>
+        </div>
+      </div>
+
+      <!-- Relatório Rápido: Realizados x A Realizar -->
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-sm">
+        <div class="flex flex-wrap items-center gap-4">
+          <span class="text-slate-600">A realizar: <strong id="repTodo" class="text-sky-700">0</strong></span>
+          <span class="text-slate-600">Realizados / Prontos: <strong id="repDone" class="text-emerald-700">0</strong></span>
+        </div>
+        <span id="sheetStatusText" class="text-xs text-slate-400">Modo local + Google Sheets</span>
+      </div>
+
+      <!-- Filtros -->
+      <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200/80 flex flex-wrap items-center gap-3">
         <div>
           <label for="filterStatus" class="block text-xs font-medium text-slate-500 mb-1">Status</label>
           <select
@@ -163,30 +248,15 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-2">
-        <button
-          onclick="setToday()"
-          class="text-xs font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg transition cursor-pointer"
-        >
-          Ir para Hoje
-        </button>
-        <button
-          onclick="clearDate()"
-          class="text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition cursor-pointer"
-        >
-          Todas as Datas
-        </button>
+      <!-- Lista de Atendimentos -->
+      <div id="appointmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+      <!-- Estado Vazio -->
+      <div id="emptyState" class="hidden bg-white rounded-xl p-10 text-center border border-dashed border-slate-300">
+        <p class="text-slate-600 font-medium">Nenhum atendimento encontrado para os filtros atuais.</p>
+        <p class="text-xs text-slate-400 mt-1">Clique em "+ Novo Atendimento" para cadastrar um banho ou tosa.</p>
       </div>
     </section>
-
-    <!-- Lista de Atendimentos -->
-    <section id="appointmentsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></section>
-
-    <!-- Estado Vazio -->
-    <div id="emptyState" class="hidden bg-white rounded-xl p-10 text-center border border-dashed border-slate-300">
-      <p class="text-slate-600 font-medium">Nenhum atendimento encontrado para os filtros atuais.</p>
-      <p class="text-xs text-slate-400 mt-1">Clique em "+ Novo Atendimento" para cadastrar um banho ou tosa.</p>
-    </div>
   </main>
 
   <!-- Modal de Cadastro / Edição -->
@@ -305,6 +375,7 @@
     const SESSION_KEY = 'petagenda_auth_ok_v1';
 
     const STATUS_FLOW = ['Agendado', 'No Banho', 'Secagem / Tosa', 'Pronto p/ Buscar', 'Entregue'];
+    const ACTIVE_STATUSES = ['No Banho', 'Secagem / Tosa'];
     const DONE_STATUSES = ['Pronto p/ Buscar', 'Entregue'];
 
     const STATUS_BADGES = {
@@ -316,6 +387,35 @@
     };
 
     let sheetPassword = null;
+    let currentViewMode = 'attendance';
+
+    function setViewMode(mode) {
+      currentViewMode = mode;
+      const attView = document.getElementById('attendanceView');
+      const dashView = document.getElementById('dashboardView');
+      const tabAtt = document.getElementById('tabAttendance');
+      const tabDash = document.getElementById('tabDashboard');
+      const btnHeader = document.getElementById('btnToggleAttendance');
+
+      if (mode === 'attendance') {
+        attView.classList.remove('hidden');
+        dashView.classList.add('hidden');
+        tabAtt.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition cursor-pointer bg-slate-900 text-white shadow-sm';
+        tabDash.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer text-slate-700 hover:bg-white';
+        btnHeader.textContent = 'Ver Painel Geral';
+      } else {
+        attView.classList.add('hidden');
+        dashView.classList.remove('hidden');
+        tabDash.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold transition cursor-pointer bg-slate-900 text-white shadow-sm';
+        tabAtt.className = 'px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition cursor-pointer text-slate-700 hover:bg-white';
+        btnHeader.textContent = 'Tela de Atendimento';
+      }
+      renderAll();
+    }
+
+    function toggleViewMode() {
+      setViewMode(currentViewMode === 'attendance' ? 'dashboard' : 'attendance');
+    }
 
     function getSheetCsvUrl(sheetName) {
       return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
@@ -412,7 +512,7 @@
 
       const loadedPassword = await fetchSheetPassword();
       if (!loadedPassword) {
-        errEl.textContent = 'Não foi possível validar a senha na aba Config. Verifique se a planilha está pública para leitura.';
+        errEl.textContent = 'Não foi possível ler a senha na planilha. Verifique se a aba Config tem "senha" e o valor configurado.';
         errEl.classList.remove('hidden');
         return;
       }
@@ -429,7 +529,7 @@
     function unlockPanel() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('panelContent').classList.remove('hidden');
-      renderAppointments();
+      setViewMode('attendance');
     }
 
     function lockPanel() {
@@ -448,12 +548,12 @@
 
     function setToday() {
       document.getElementById('filterDate').value = getTodayISO();
-      renderAppointments();
+      renderAll();
     }
 
     function clearDate() {
       document.getElementById('filterDate').value = '';
-      renderAppointments();
+      renderAll();
     }
 
     function loadAppointments() {
@@ -483,16 +583,30 @@
         {
           id: crypto.randomUUID(),
           date: today,
-          time: '10:30',
-          petName: 'Luna',
-          petBreed: 'Poodle (Pequeno)',
-          ownerName: 'Beatriz Lima',
-          ownerPhone: '85999992222',
+          time: '10:00',
+          petName: 'Mel',
+          petBreed: 'Golden Retriever (Grande)',
+          ownerName: 'Fernanda Rocha',
+          ownerPhone: '85999993333',
+          serviceType: 'Banho + Tosa na Máquina',
+          price: 110,
+          status: 'Agendado',
+          paid: false,
+          notes: 'Adora água morna.'
+        },
+        {
+          id: crypto.randomUUID(),
+          date: today,
+          time: '11:30',
+          petName: 'Pipoca',
+          petBreed: 'Shih Tzu (Pequeno)',
+          ownerName: 'Ana Paula',
+          ownerPhone: '85999994444',
           serviceType: 'Banho + Tosa na Tesoura',
           price: 95,
-          status: 'Pronto p/ Buscar',
+          status: 'Agendado',
           paid: true,
-          notes: 'Deixar o topete arredondado.'
+          notes: 'Sensível nas patinhas.'
         }
       ];
       saveToStorage(sample);
@@ -528,7 +642,7 @@
 
           saveToStorage(mapped);
           document.getElementById('sheetStatusText').textContent = 'Atendimentos carregados do Google Sheets';
-          renderAppointments();
+          renderAll();
           if (showAlert) alert('Dados carregados da aba "Atendimentos" com sucesso!');
         }
       } catch (err) {
@@ -615,7 +729,28 @@
       saveToStorage(list);
       closeModal();
       document.getElementById('filterDate').value = payload.date;
-      renderAppointments();
+      renderAll();
+    }
+
+    function setStatus(id, newStatus) {
+      const list = loadAppointments();
+      const item = list.find(a => a.id === id);
+      if (!item) return;
+      item.status = newStatus;
+      saveToStorage(list);
+      renderAll();
+    }
+
+    function callNextPet(id, dayDate) {
+      const list = loadAppointments();
+      const hasActiveOnDay = list.some(
+        a => (!dayDate || a.date === dayDate) && ACTIVE_STATUSES.includes(a.status)
+      );
+      if (hasActiveOnDay) {
+        alert('Finalize ou marque como "Entregue" o pet em atendimento atual antes de chamar o próximo.');
+        return;
+      }
+      setStatus(id, 'No Banho');
     }
 
     function advanceStatus(id) {
@@ -627,7 +762,7 @@
       if (currentIdx < STATUS_FLOW.length - 1) {
         item.status = STATUS_FLOW[currentIdx + 1];
         saveToStorage(list);
-        renderAppointments();
+        renderAll();
       }
     }
 
@@ -638,14 +773,14 @@
 
       item.paid = !item.paid;
       saveToStorage(list);
-      renderAppointments();
+      renderAll();
     }
 
     function deleteAppointment(id) {
       if (!confirm('Deseja realmente excluir este atendimento?')) return;
       const list = loadAppointments().filter(a => a.id !== id);
       saveToStorage(list);
-      renderAppointments();
+      renderAll();
     }
 
     function sendWhatsApp(id) {
@@ -683,7 +818,7 @@
           const parsed = JSON.parse(e.target.result);
           if (!Array.isArray(parsed)) throw new Error('Formato inválido');
           saveToStorage(parsed);
-          renderAppointments();
+          renderAll();
           alert('Backup importado com sucesso!');
         } catch (err) {
           alert('Arquivo inválido. Selecione um JSON exportado pelo sistema.');
@@ -699,6 +834,209 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function renderAttendanceScreen(all, selectedDate) {
+      const dayItems = (selectedDate ? all.filter(a => a.date === selectedDate) : all)
+        .slice()
+        .sort((a, b) => `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`));
+
+      const activePets = dayItems.filter(a => ACTIVE_STATUSES.includes(a.status));
+      const currentPet = activePets[0] || null;
+      const canCallNext = activePets.length === 0;
+
+      const upcomingPets = dayItems.filter(
+        a => a.status === 'Agendado' && (!currentPet || a.id !== currentPet.id)
+      );
+
+      const finishedPets = dayItems.filter(a => DONE_STATUSES.includes(a.status));
+
+      const gateBadge = document.getElementById('callGateBadge');
+      if (canCallNext) {
+        gateBadge.textContent = '✓ Próximo liberado para chamar';
+        gateBadge.className = 'text-xs font-bold px-3 py-1 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200';
+      } else {
+        gateBadge.textContent = 'Em andamento (entregue para liberar)';
+        gateBadge.className = 'text-xs font-bold px-3 py-1 rounded-full border bg-amber-50 text-amber-800 border-amber-200';
+      }
+
+      const currentCardEl = document.getElementById('currentPetCard');
+      if (!currentPet) {
+        currentCardEl.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 border-2 border-dashed border-emerald-300 text-center space-y-3 shadow-sm">
+            <p class="text-xl font-extrabold text-slate-800">Nenhum pet em atendimento no momento</p>
+            <p class="text-sm text-slate-500">
+              ${upcomingPets.length > 0
+                ? 'Clique em "Chamar para Atendimento" em um dos pets da lista ao lado para iniciar.'
+                : 'Não há pets agendados pendentes para esta data.'}
+            </p>
+          </div>
+        `;
+      } else {
+        const nextIdx = STATUS_FLOW.indexOf(currentPet.status) + 1;
+        const nextStatus = nextIdx < STATUS_FLOW.length ? STATUS_FLOW[nextIdx] : null;
+        const badgeClass = STATUS_BADGES[currentPet.status] || 'bg-sky-100 text-sky-800 border-sky-200';
+
+        currentCardEl.innerHTML = `
+          <article class="bg-white rounded-2xl p-6 sm:p-7 shadow-md border-2 border-emerald-500 space-y-5">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-extrabold bg-slate-900 text-white px-3 py-1 rounded-lg">
+                    ${escapeHTML(currentPet.time)}
+                  </span>
+                  <span class="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                    Atendimento Atual
+                  </span>
+                </div>
+                <h3 class="text-3xl sm:text-4xl font-black text-slate-900 pt-2 leading-tight">
+                  🐾 ${escapeHTML(currentPet.petName)}
+                </h3>
+                ${currentPet.petBreed ? `<p class="text-sm font-medium text-slate-500">${escapeHTML(currentPet.petBreed)}</p>` : ''}
+              </div>
+
+              <span class="text-sm font-bold px-3.5 py-1.5 rounded-full border ${badgeClass}">
+                ${escapeHTML(currentPet.status)}
+              </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 rounded-xl p-4 border border-slate-200/70 text-sm">
+              <div>
+                <span class="block text-xs text-slate-400">Serviço</span>
+                <strong class="text-slate-800 text-base">${escapeHTML(currentPet.serviceType)}</strong>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400">Tutor</span>
+                <strong class="text-slate-800 text-base">${escapeHTML(currentPet.ownerName)}</strong>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400">Valor</span>
+                <strong class="text-slate-800">${formatCurrency(currentPet.price)}</strong>
+              </div>
+              <div>
+                <span class="block text-xs text-slate-400">Pagamento</span>
+                <button
+                  onclick="togglePaid('${currentPet.id}')"
+                  class="mt-0.5 text-xs font-bold px-2.5 py-1 rounded-md border cursor-pointer transition ${
+                    currentPet.paid
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                  }"
+                >
+                  ${currentPet.paid ? '✓ Pago' : 'Pendente (clique p/ marcar)'}
+                </button>
+              </div>
+            </div>
+
+            ${currentPet.notes ? `
+              <div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-sm text-amber-950">
+                <strong class="font-bold">Observações importantes:</strong> ${escapeHTML(currentPet.notes)}
+              </div>
+            ` : ''}
+
+            <div class="pt-2 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100">
+              <div class="flex flex-wrap items-center gap-2">
+                ${nextStatus && nextStatus !== 'Entregue' ? `
+                  <button
+                    onclick="advanceStatus('${currentPet.id}')"
+                    class="bg-sky-600 hover:bg-sky-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl transition cursor-pointer"
+                  >
+                    Avançar → ${escapeHTML(nextStatus)}
+                  </button>
+                ` : ''}
+                <button
+                  onclick="setStatus('${currentPet.id}', 'Entregue')"
+                  class="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm px-5 py-2.5 rounded-xl shadow-sm transition cursor-pointer"
+                >
+                  ✓ Marcar como Entregue (Liberar Próximo)
+                </button>
+              </div>
+
+              <div class="flex items-center gap-2">
+                ${currentPet.ownerPhone ? `
+                  <button
+                    onclick="sendWhatsApp('${currentPet.id}')"
+                    class="bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 font-semibold text-xs px-3 py-2 rounded-xl transition cursor-pointer"
+                  >
+                    WhatsApp
+                  </button>
+                ` : ''}
+                <button
+                  onclick="openModal('${currentPet.id}')"
+                  class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-3 py-2 rounded-xl transition cursor-pointer"
+                >
+                  Editar
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }
+
+      document.getElementById('upcomingCountBadge').textContent = upcomingPets.length;
+      const upcomingEl = document.getElementById('upcomingPetsList');
+
+      if (upcomingPets.length === 0) {
+        upcomingEl.innerHTML = `
+          <div class="bg-white rounded-xl p-6 text-center border border-dashed border-slate-300 text-sm text-slate-500">
+            Nenhum pet com atendimento posterior na data selecionada.
+          </div>
+        `;
+      } else {
+        upcomingEl.innerHTML = upcomingPets.map((pet, idx) => `
+          <article class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex items-center justify-between gap-3">
+            <div class="space-y-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold bg-slate-800 text-white px-2 py-0.5 rounded-md">
+                  ${escapeHTML(pet.time)}
+                </span>
+                <span class="text-[11px] font-semibold text-slate-400">#${idx + 1} na fila</span>
+              </div>
+              <h4 class="text-base font-bold text-slate-800 truncate">
+                ${escapeHTML(pet.petName)}
+                ${pet.petBreed ? `<span class="text-xs font-normal text-slate-500">(${escapeHTML(pet.petBreed)})</span>` : ''}
+              </h4>
+              <p class="text-xs text-slate-600 truncate">
+                <strong>${escapeHTML(pet.serviceType)}</strong> • Tutor: ${escapeHTML(pet.ownerName)}
+              </p>
+            </div>
+
+            <button
+              onclick="callNextPet('${pet.id}', '${escapeHTML(pet.date)}')"
+              ${!canCallNext ? 'disabled' : ''}
+              class="shrink-0 text-xs font-bold px-3.5 py-2.5 rounded-xl transition ${
+                canCallNext
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm cursor-pointer'
+                  : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+              }"
+              title="${canCallNext ? 'Chamar este pet para atendimento' : 'Aguarde entregar o pet atual'}"
+            >
+              ${canCallNext ? 'Chamar' : 'Aguardando'}
+            </button>
+          </article>
+        `).join('');
+      }
+
+      document.getElementById('finishedCountBadge').textContent = `${finishedPets.length} registro(s)`;
+      const finishedEl = document.getElementById('finishedPetsList');
+      if (finishedPets.length === 0) {
+        finishedEl.innerHTML = `<p class="text-xs text-slate-400 col-span-full">Nenhum pet pronto ou entregue ainda.</p>`;
+      } else {
+        finishedEl.innerHTML = finishedPets.map(pet => {
+          const badgeClass = STATUS_BADGES[pet.status] || 'bg-slate-100 text-slate-700 border-slate-200';
+          return `
+            <div class="rounded-xl p-3 border border-slate-200/80 bg-slate-50/70 flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-slate-800 truncate">${escapeHTML(pet.time)} — ${escapeHTML(pet.petName)}</p>
+                <p class="text-xs text-slate-500 truncate">${escapeHTML(pet.ownerName)} • ${formatCurrency(pet.price)}</p>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full border ${badgeClass} whitespace-nowrap">
+                ${escapeHTML(pet.status)}
+              </span>
+            </div>
+          `;
+        }).join('');
+      }
     }
 
     function renderAppointments() {
@@ -730,7 +1068,7 @@
           const haystack = `${a.petName} ${a.petBreed} ${a.ownerName} ${a.serviceType}`.toLowerCase();
           return haystack.includes(query);
         })
-        .sort((a, b) => `${a.data || ''} ${a.time || ''}`.localeCompare(`${b.data || ''} ${b.time || ''}`));
+        .sort((a, b) => `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`));
 
       const container = document.getElementById('appointmentsList');
       const emptyState = document.getElementById('emptyState');
@@ -831,6 +1169,13 @@
           </article>
         `;
       }).join('');
+    }
+
+    function renderAll() {
+      const all = loadAppointments();
+      const selectedDate = document.getElementById('filterDate').value;
+      renderAttendanceScreen(all, selectedDate);
+      renderAppointments();
     }
 
     // Inicialização
