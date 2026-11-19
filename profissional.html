@@ -300,6 +300,7 @@
 
   <script>
     const SHEET_ID = '1RAghW8kC1GfjZxj0Yose1jm_voBn_nhZ_MGCQRiPz8s';
+    const PUB_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOcWdd6WVHMUrYSS0cE5krxcvljOjCeEjGqox3Dnfc_CfG1jZ8RdPQ0C3PlqSGM6QJQ_VCEAd0oh1-/pub?output=csv';
     const STORAGE_KEY = 'petagenda_appointments_v1';
     const SESSION_KEY = 'petagenda_auth_ok_v1';
 
@@ -320,7 +321,7 @@
       return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     }
 
-    function parseCSV(csvText) {
+    function parseCSVRaw(csvText) {
       const rows = [];
       let row = [];
       let field = '';
@@ -354,7 +355,11 @@
         row.push(field.trim());
         if (row.some(cell => cell !== '')) rows.push(row);
       }
+      return rows;
+    }
 
+    function parseCSV(csvText) {
+      const rows = parseCSVRaw(csvText);
       if (rows.length < 2) return [];
       const headers = rows[0].map(h => h.toLowerCase().replace(/\s+/g, '_'));
       return rows.slice(1).map(r => {
@@ -366,27 +371,37 @@
       });
     }
 
+    function extractPasswordFromRawRows(rawRows) {
+      for (const r of rawRows) {
+        const col0 = String(r[0] || '').trim().toLowerCase();
+        if (col0 === 'senha' || col0 === 'password') {
+          const val = String(r[1] || '').trim();
+          if (val) return val;
+        }
+      }
+      return null;
+    }
+
     async function fetchSheetPassword() {
       sheetPassword = null;
-      try {
-        const res = await fetch(getSheetCsvUrl('Config'));
-        if (!res.ok) return null;
-        const csv = await res.text();
-        const rows = parseCSV(csv);
-        const passRow = rows.find(r => {
-          const k = String(r.chave || r.config || r.item || r.nome || '').toLowerCase();
-          return k === 'senha' || k === 'password';
-        });
-        if (passRow) {
-          sheetPassword = String(passRow.valor || passRow.senha || '').trim();
-        } else if (rows[0] && rows[0].senha) {
-          sheetPassword = String(rows[0].senha).trim();
+      const urls = [getSheetCsvUrl('Config'), PUB_CSV_URL];
+
+      for (const url of urls) {
+        try {
+          const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}_ts=${Date.now()}`);
+          if (!res.ok) continue;
+          const csv = await res.text();
+          const rawRows = parseCSVRaw(csv);
+          const found = extractPasswordFromRawRows(rawRows);
+          if (found) {
+            sheetPassword = found;
+            return sheetPassword;
+          }
+        } catch (err) {
+          console.error('Erro ao ler senha:', err);
         }
-        return sheetPassword;
-      } catch (err) {
-        console.error('Erro ao ler senha da aba Config:', err);
-        return null;
       }
+      return null;
     }
 
     async function handleLogin(e) {
@@ -402,7 +417,7 @@
         return;
       }
 
-      if (input.value.trim() === loadedPassword) {
+      if (String(input.value || '').trim() === String(loadedPassword).trim()) {
         sessionStorage.setItem(SESSION_KEY, '1');
         unlockPanel();
       } else {
@@ -490,7 +505,7 @@
 
     async function syncFromSheet(showAlert = false) {
       try {
-        const res = await fetch(getSheetCsvUrl('Atendimentos'));
+        const res = await fetch(`${getSheetCsvUrl('Atendimentos')}&_ts=${Date.now()}`);
         if (!res.ok) throw new Error('Falha ao acessar aba Atendimentos');
         const csv = await res.text();
         const rows = parseCSV(csv);
