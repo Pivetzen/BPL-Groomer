@@ -82,7 +82,7 @@
             class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>
-        <p id="loginError" class="hidden text-xs font-medium text-rose-600">Senha incorreta ou falha ao ler a aba Config.</p>
+        <p id="loginError" class="hidden text-xs font-medium text-rose-600">Senha incorreta. Tente novamente.</p>
         <button
           type="submit"
           class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2.5 rounded-lg transition cursor-pointer"
@@ -397,7 +397,7 @@
 
       const loadedPassword = await fetchSheetPassword();
       if (!loadedPassword) {
-        errEl.textContent = 'Não foi possível validar a senha na aba Config. Verifique se a planilha está acessível para leitura.';
+        errEl.textContent = 'Não foi possível validar a senha na aba Config. Verifique se a planilha está pública para leitura.';
         errEl.classList.remove('hidden');
         return;
       }
